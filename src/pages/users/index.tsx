@@ -1,16 +1,19 @@
-import { Box, Flex, Heading, Button, Icon, Table, Thead, Tr, Th, Checkbox, Tbody, Td, Text, useBreakpointValue, Spinner } from "@chakra-ui/react";
+import { Box, Flex, Stack, Heading, Button, Icon, Table, Thead, Tr, Th, Checkbox, Tbody, Td, Text, useBreakpointValue, Spinner,Link } from "@chakra-ui/react";
 import { Sidebar } from "../../components/Sidebar";
 import { Header } from "../../components/Header";
-import { RiAddLine, RiPencilLine } from "react-icons/ri";
+import { RiAddLine, RiPencilLine, RiRefreshLine } from "react-icons/ri";
 import { Pagination } from "../../components/Pagination";
-import Link from 'next/link';
 import { useQuery } from 'react-query';
 import { api } from "../../services/api";
 import { useUsers } from "../../services/hooks/useUsers";
+import { useState } from "react";
+import { queryClient } from '../../services/queryClient';
+import NextLink from 'next/link';
 
 
 export default function UserList() {
-    const { data, isLoading, error, isFetching } = useUsers()
+    const [page, setPage] = useState(1);
+    const { data, isLoading, error, isFetching, refetch } = useUsers(page)
 
 
     const isWideVersion = useBreakpointValue({
@@ -18,30 +21,56 @@ export default function UserList() {
         lg: true,
     })
 
+    async function handlePrefetchUser(userId: string) {
+        await queryClient.prefetchQuery(
+            ['user', { userId }],
+            async () => {
+                const response = await api.get(`users/${userId}`);
+
+                return response.data;
+            },
+            { staleTime: 1000 * 60 * 10 },
+        );
+    }
+
     return (
         <Box>
             <Header />
             <Flex w="100%" my="6" maxWidth={1480} mx="auto" px="6">
                 <Sidebar />
+
                 <Box flex="1" borderRadius={8} bg="gray.800" p="8">
                     <Flex mb="8" justify="space-between" align="center">
                         <Heading size="lg" fontWeight="normal" >
                             Usuários
-                            { !isLoading && isFetching && <Spinner size="sm" color="gray.500" ml="4" />}
+                            {!isLoading && isFetching && <Spinner size="sm" color="gray.500" ml="4" />}
                         </Heading>
-
-                        <Link href="/users/create" passHref>
+                        <Stack direction="row" spacing="3">
                             <Button
-                                as="a"
                                 size="sm"
                                 fontSize="sm"
-                                colorScheme="pink"
-                                leftIcon={<Icon as={RiAddLine} fontSize="20" />}
+                                colorScheme="blue"
+                                leftIcon={<Icon as={RiRefreshLine} fontSize="20" />}
+                                onClick={() => refetch()}
+                                disabled={isLoading || isFetching}
                             >
-                                Criar novo
+                                Atualizar
                             </Button>
-                        </Link>
+
+                            <NextLink href="/users/create" passHref>
+                                <Button
+                                    as="a"
+                                    size="sm"
+                                    fontSize="sm"
+                                    colorScheme="pink"
+                                    leftIcon={<Icon as={RiAddLine} fontSize="20" />}
+                                >
+                                    Criar novo Usuario
+                                </Button>
+                            </NextLink>
+                        </Stack>
                     </Flex>
+
                     {isLoading ? (
                         <Flex justify="center">
                             <Spinner />
@@ -63,19 +92,24 @@ export default function UserList() {
                                             Usuário
                                         </Th>
                                         {isWideVersion && <Th>Data de Cadastro</Th>}
-                                        <Th></Th>
+                                        <Th width="8"></Th>
                                     </Tr>
                                 </Thead>
                                 <Tbody>
-                                    {data.map(user => {
+                                    {data.users.map(user => {
                                         return (
                                             <Tr key={user.id}>
-                                                <Td px="6">
+                                                <Td paddingX={['4', '4', '6']}>
                                                     <Checkbox colorScheme="pink" />
                                                 </Td>
                                                 <Td>
                                                     <Box>
-                                                        <Text fontWeight="bold">{user.name}</Text>
+                                                        <Link
+                                                            color="purple.400"
+                                                            onMouseEnter={() => handlePrefetchUser(user.id)}
+                                                        >
+                                                            <Text fontWeight="bold">{user.name}</Text>
+                                                        </Link>
                                                         <Text fontSize="sm" color="gray.300">{user.email}</Text>
                                                     </Box>
                                                 </Td>
@@ -96,7 +130,11 @@ export default function UserList() {
                                     })}
                                 </Tbody>
                             </Table>
-                            <Pagination />
+                            <Pagination
+                                totalCountOfRegisters={data.totalCount}
+                                currentPage={page}
+                                onPageChange={setPage}
+                            />
                         </>
                     )}
                 </Box>
